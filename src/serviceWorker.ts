@@ -1,18 +1,14 @@
-import { initializeStorageWithDefaults } from './storage';
+import { log } from "./utils";
 
-chrome.runtime.onInstalled.addListener(async () => {
-  // Here goes everything you want to execute after extension initialization
+chrome.webNavigation.onCompleted.addListener((details) => {
+  log('onCompleted details', details);
 
-  await initializeStorageWithDefaults({});
+  chrome.storage.sync.get(['blacklist', 'fallbackUrl'], ({ blacklist, fallbackUrl }) => {
+    log('blacklist', blacklist);
+    log('fallbackUrl', fallbackUrl);
 
-  console.log('Extension successfully installed!');
-});
-
-// Log storage changes, might be safely removed
-chrome.storage.onChanged.addListener((changes) => {
-  for (const [key, value] of Object.entries(changes)) {
-    console.log(
-      `"${key}" changed from "${value.oldValue}" to "${value.newValue}"`,
-    );
-  }
+    if (blacklist && blacklist.some(pattern => new RegExp(pattern).test(details.url))) {
+      chrome.tabs.update(details.tabId, { url: fallbackUrl || chrome.runtime.getURL('fallback.html') });
+    }
+  });
 });

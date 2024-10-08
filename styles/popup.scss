@@ -1,15 +1,21 @@
 @import 'common.scss';
 
-.container {
-  min-height: 200px;
-  min-width: 300px;
-
-  padding: 2rem;
-
-  display: flex;
-
-  flex-direction: column;
-
-  align-items: center;
-  justify-content: center;
-}
+.popup-container {
+    padding: 10px;
+    h2 {
+      font-size: 18px;
+    }
+    ul {
+      list-style-type: none;
+      li {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 5px;
+      }
+    }
+    input {
+      width: 100%;
+      margin-bottom: 5px;
+    }
+  }
+  
