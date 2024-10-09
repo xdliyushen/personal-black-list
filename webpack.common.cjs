@@ -3,7 +3,6 @@ const path = require('path');
 const DotenvPlugin = require('dotenv-webpack');
 const ESLintPlugin = require('eslint-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 
 module.exports = {
   entry: {
@@ -22,7 +21,7 @@ module.exports = {
       },
       {
         test: /\.(scss|css)$/,
-        use: [MiniCssExtractPlugin.loader, 'css-loader', 'sass-loader'],
+        use: ['style-loader', 'css-loader', 'postcss-loader', 'sass-loader'],
       },
     ],
   },
@@ -39,9 +38,6 @@ module.exports = {
     new ESLintPlugin({
       extensions: ['js', 'ts'],
       overrideConfigFile: path.resolve(__dirname, '.eslintrc'),
-    }),
-    new MiniCssExtractPlugin({
-      filename: 'styles/[name].css',
     }),
     new CopyPlugin({
       patterns: [{ from: 'static' }],

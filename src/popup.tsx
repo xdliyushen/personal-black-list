@@ -26,7 +26,7 @@ const Popup = () => {
   };
 
   return (
-    <div className="popup-container">
+    <div className="popup-container p-8 bg-slate-600">
       <h2>Blacklist Manager</h2>
       <ul>
         {blacklist.map((entry, index) => (
