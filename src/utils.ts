@@ -1,3 +1,13 @@
+export function sendMessageToBackground(action: string, data: any, callback?: (response: any) => void) {
+    chrome.runtime.sendMessage({ action, data }, callback);
+}
+
+export function sendMessageToActiveTab(action: string, data: any, callback?: (response: any) => void) {
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+        chrome.tabs.sendMessage(tabs[0].id, { action, data }, callback);
+    });
+}
+
 export function log(name: string, data: any) {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
         chrome.tabs.sendMessage(tabs[0].id, { action: "log", name, data }, (response) => {
