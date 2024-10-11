@@ -21,42 +21,29 @@ chrome.webNavigation.onCompleted.addListener((details) => {
 
 // 页面使用时间
 // duration - 单位 ms
-const tabTimes: Record<string, { lastActiveTime: number, closed: boolean, duration: number }> = {};
+const tabTimes: Record<string, { closed: boolean, duration: number; lastVisibleTime?: number; }> = {};
 
-const updateTabTimesStorage = (tabId: number, url: string) => {
-  const duration = tabTimes[tabId].duration;
+const updateTabTimesStorage = (tabId: number) => {
+  // 获取页面 url
+  chrome.tabs.get(tabId, tab => {    
+    const duration = tabTimes[tabId].duration;
+    const url = tab.url;
 
-  chrome.storage.sync.get('tabTimes', ({ tabTimes: tabTimesStorage }) => {
-    log('tabTimesStorage', tabTimesStorage);
-
-    const currentDate = new Date();
-    const currentDay = `${currentDate.getFullYear()}-${currentDate.getMonth() + 1}-${currentDate.getDate()}`;
-
-    const newTabTimesStorage = {
-      ...tabTimesStorage,
-      [currentDay]: {
-        ...(tabTimesStorage?.[currentDay] || {}),
-        [url]: (tabTimesStorage?.[currentDay]?.[url] || 0) + duration,
-      },
-    };
-
-    log('newTabTimesStorage', newTabTimesStorage);
-
-    chrome.storage.sync.set({ tabTimes: newTabTimesStorage });
+    // TODO 写入 indexDB
+    // TODO 事务
   });
 };
 
+// 页面激活 -> 页面不展示也会触发
 chrome.tabs.onActivated.addListener(activeInfo => {
   const tabId = activeInfo.tabId;
 
   log('onActivated activeInfo', activeInfo);
 
   tabTimes[tabId] = {
-    ...(tabTimes[tabId] || {
-      closed: false,
-      duration: 0,
-    }),
-    lastActiveTime: Date.now(),
+    closed: false,
+    duration: 0,
+    ...(tabTimes[tabId] || {}),
   };
 });
 
@@ -65,27 +52,26 @@ chrome.tabs.onRemoved.addListener(tabId => {
   log('onRemoved tabId', tabId);
 
   tabTimes[tabId].closed = true;
-  tabTimes[tabId].duration = Date.now() - tabTimes[tabId].lastActiveTime;
+  // 之所以这里要判断 lastVisibleTime, 是为了避免页面只打开但一直隐藏的情况下, duration 为 0
+  tabTimes[tabId].duration += tabTimes[tabId].lastVisibleTime ? Date.now() - tabTimes[tabId].lastVisibleTime : 0;
 
-  // 获取页面 url
-  chrome.tabs.get(tabId, tab => {
-    log('onRemoved tab', tab);
-
-    updateTabTimesStorage(tabId, tab.url);
-  });
+  updateTabTimesStorage(tabId);
 });
 
 // 监听 message
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, sender) => {
   log('onMessage request', request);
   log('onMessage sender', sender);
 
   const tabId = sender.tab.id;
 
   // 避免收到的 message 在 tab 被关闭后才被处理
-  if (request.action === 'tabHidden' && !tabTimes[tabId].closed) {
-    tabTimes[tabId].duration = Date.now() - tabTimes[tabId].lastActiveTime;
+  if (request.action === 'addPageDuration' && !tabTimes[tabId].closed) {
+    tabTimes[tabId].duration += (request.duration || 0);
+    updateTabTimesStorage(tabId);
   }
 
-  sendResponse('tabHidden');
+  if (request.action === 'tabVisible') {
+    tabTimes[tabId].lastVisibleTime = Date.now();
+  }
 });
