@@ -37,29 +37,22 @@ const tabId2Key: Record<number, string> = {};
 // 更新页面使用时间
 const updateTabTimesStorage = async (tabId: number) => {
   return new Promise((resolve, reject) => {
-    const url = tabTimes[tabId].url || await getTabUrlById(tabId);
-
-    // 获取页面 url
-    chrome.tabs.get(tabId, tab => {    
-      const duration = tabTimes[tabId].duration;
-      const url = tab.url;
-
-      // TODO 写入 indexDB
-      // TODO 事务
-      
-    });
+    // 将数据存入 indexedDB
   });
 };
 
 const createTabTimesItem = async (tabId: number) => {
   const url = await getTabUrlById(tabId) as string;
-  const key = await hash(`${url}_${tabId}`);
+  const pageStartTime = Date.now();
+  const key = await hash(`${url}_${tabId}_${pageStartTime}`);
+
+  // 为了防止同一个 tab 重复访问相同 url 导致的 key 重复, 这里加入 pageStartTime 作为 hash 的一部分
 
   tabTimes[key] = {
     closed: false,
     duration: 0,
     url,
-    pageStartTime: Date.now(),
+    pageStartTime,
     pageEndTime: -1,
     lastVisibleTime: -1,
   };
@@ -118,6 +111,7 @@ chrome.runtime.onMessage.addListener((request, sender) => {
   // 避免收到的 message 在 tab 被关闭后才被处理
   if (request.action === 'addPageDuration' && !tabTimes[key].closed) {
     tabTimes[key].duration += (request.duration || 0);
+    tabTimes[key].lastVisibleTime = Date.now();
 
     updateTabTimesStorage(tabId);
   }
