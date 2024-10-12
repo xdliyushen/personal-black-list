@@ -1,4 +1,4 @@
-import { log } from "./utils";
+import { getTabUrlById, hash, log } from "./utils";
 
 // 域名黑名单
 chrome.webNavigation.onCompleted.addListener((details) => {
@@ -21,39 +21,88 @@ chrome.webNavigation.onCompleted.addListener((details) => {
 
 // 页面使用时间
 // duration - 单位 ms
-const tabTimes: Record<string, { closed: boolean, duration: number; lastVisibleTime?: number; }> = {};
+const tabTimes: Record<
+  string, 
+  { 
+    closed: boolean;
+    duration: number; 
+    url: string, 
+    lastVisibleTime?: number; 
+    pageStartTime?: number;
+    pageEndTime?: number;
+  }
+> = {};
+const tabId2Key: Record<number, string> = {};
 
-const updateTabTimesStorage = (tabId: number) => {
-  // 获取页面 url
-  chrome.tabs.get(tabId, tab => {    
-    const duration = tabTimes[tabId].duration;
-    const url = tab.url;
+// 更新页面使用时间
+const updateTabTimesStorage = async (tabId: number) => {
+  return new Promise((resolve, reject) => {
+    const url = tabTimes[tabId].url || await getTabUrlById(tabId);
 
-    // TODO 写入 indexDB
-    // TODO 事务
+    // 获取页面 url
+    chrome.tabs.get(tabId, tab => {    
+      const duration = tabTimes[tabId].duration;
+      const url = tab.url;
+
+      // TODO 写入 indexDB
+      // TODO 事务
+      
+    });
   });
 };
 
-// 页面激活 -> 页面不展示也会触发
-chrome.tabs.onActivated.addListener(activeInfo => {
+const createTabTimesItem = async (tabId: number) => {
+  const url = await getTabUrlById(tabId) as string;
+  const key = await hash(`${url}_${tabId}`);
+
+  tabTimes[key] = {
+    closed: false,
+    duration: 0,
+    url,
+    pageStartTime: Date.now(),
+    pageEndTime: -1,
+    lastVisibleTime: -1,
+  };
+
+  tabId2Key[tabId] = key;
+}
+
+const updateTabTimesItem = async (tabId: number, key: string, value: any) => {
+  const targetKey = tabId2Key[tabId];
+  tabTimes[targetKey] = {
+    ...tabTimes[key],
+    [key]: value,
+  };
+}
+
+// 页面激活 -> 页面不展示也会触发, 例如通过 cmd + shft + t 恢复多个页面 -> TODO chatgpt说不会, 需要验证
+chrome.tabs.onActivated.addListener(async activeInfo => {
   const tabId = activeInfo.tabId;
 
   log('onActivated activeInfo', activeInfo);
 
-  tabTimes[tabId] = {
-    closed: false,
-    duration: 0,
-    ...(tabTimes[tabId] || {}),
-  };
+  createTabTimesItem(tabId);
+});
+
+// 页面链接变化
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  log('onUpdated tabId', tabId);
+  log('onUpdated changeInfo', changeInfo);
+  log('onUpdated tab', tab);
+
+  createTabTimesItem(tabId);
 });
 
 // 页面关闭
 chrome.tabs.onRemoved.addListener(tabId => {
   log('onRemoved tabId', tabId);
 
-  tabTimes[tabId].closed = true;
+  const key = tabId2Key[tabId];
+
+  tabTimes[key].closed = true;
+  tabTimes[key].pageEndTime = Date.now();
   // 之所以这里要判断 lastVisibleTime, 是为了避免页面只打开但一直隐藏的情况下, duration 为 0
-  tabTimes[tabId].duration += tabTimes[tabId].lastVisibleTime ? Date.now() - tabTimes[tabId].lastVisibleTime : 0;
+  tabTimes[key].duration += tabTimes[key].lastVisibleTime ? Date.now() - tabTimes[key].lastVisibleTime : 0;
 
   updateTabTimesStorage(tabId);
 });
@@ -64,14 +113,16 @@ chrome.runtime.onMessage.addListener((request, sender) => {
   log('onMessage sender', sender);
 
   const tabId = sender.tab.id;
+  const key = tabId2Key[tabId];
 
   // 避免收到的 message 在 tab 被关闭后才被处理
-  if (request.action === 'addPageDuration' && !tabTimes[tabId].closed) {
-    tabTimes[tabId].duration += (request.duration || 0);
+  if (request.action === 'addPageDuration' && !tabTimes[key].closed) {
+    tabTimes[key].duration += (request.duration || 0);
+
     updateTabTimesStorage(tabId);
   }
 
   if (request.action === 'tabVisible') {
-    tabTimes[tabId].lastVisibleTime = Date.now();
+    tabTimes[key].lastVisibleTime = Date.now();
   }
 });

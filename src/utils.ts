@@ -25,3 +25,25 @@ export function initLog() {
 
     console.log('log initialized');
 }
+
+export function getTabUrlById(tagId: number) {
+    return new Promise((resolve) => {
+        try {
+            chrome.tabs.get(tagId, tab => {
+                resolve(tab.url || '');
+            });
+        } catch (error) {
+            console.error('getTabUrlById error', error);
+            resolve('');
+        }
+    })
+}
+
+export async function hash(str: string) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return hashHex;
+}
